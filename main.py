@@ -1,4 +1,3 @@
-%%writefile main.py
 """
 main.py
 Main entrypoint to run data ingestion, embedding extraction, model benchmarking, 
