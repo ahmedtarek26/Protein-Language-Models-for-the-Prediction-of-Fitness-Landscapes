@@ -1,6 +1,6 @@
 """
 src/evaluate.py
-Benchmark execution across foundation models, splits, and regression heads.
+Evaluation metrics and benchmark runner across models and split protocols.
 """
 
 import numpy as np
@@ -9,11 +9,11 @@ from scipy.stats import spearmanr, pearsonr
 from sklearn.linear_model import Ridge
 from xgboost import XGBRegressor
 
-from src.models import train_torch_mlp
+from src.models import train_torch_mlp, train_geoepinet
 
 
 def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
-    """Calculates Spearman's rho, Pearson's r, and NDCG@10%."""
+    """Calculates Spearman rank correlation, Pearson correlation, and NDCG@10%."""
     rho, _ = spearmanr(y_true, y_pred)
     r, _ = pearsonr(y_true, y_pred)
 
@@ -35,12 +35,16 @@ def compute_metrics(y_true: np.ndarray, y_pred: np.ndarray) -> dict:
     }
 
 
-def run_benchmark(df: pd.DataFrame, splits: dict, X_esm2: np.ndarray, X_esm3: np.ndarray, protein_name: str, device) -> pd.DataFrame:
-    """
-    Fits and evaluates Ridge, XGBoost, and Deep MLP across all available splits.
-    """
+def run_benchmark(
+    df: pd.DataFrame, splits: dict,
+    X_esm2: np.ndarray, X_esm3: np.ndarray,
+    coords: np.ndarray, protein_name: str,
+    device
+) -> pd.DataFrame:
+    """Runs all models across available splits and records performance metrics."""
     records = []
     y = df["DMS_score"].values
+    max_len = len(coords)
 
     for split_name, (idx_tr, idx_te) in splits.items():
         if len(idx_tr) == 0 or len(idx_te) == 0:
@@ -49,25 +53,29 @@ def run_benchmark(df: pd.DataFrame, splits: dict, X_esm2: np.ndarray, X_esm3: np
         print(f"\n--- [{protein_name}] Evaluating {split_name.upper()} split ({len(idx_tr)} train / {len(idx_te)} test) ---")
         y_tr, y_te = y[idx_tr], y[idx_te]
 
-        # Models to evaluate
-        configs = [
-            ("ESM-2", "Ridge", Ridge(alpha=1.0), X_esm2),
-            ("ESM-2", "XGBoost", XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42, n_jobs=-1), X_esm2),
-            ("ESM3", "Ridge", Ridge(alpha=1.0), X_esm3),
-            ("ESM3", "XGBoost", XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42, n_jobs=-1), X_esm3),
-        ]
+        # 1. Ridge Baseline
+        ridge_esm2 = Ridge(alpha=1.0).fit(X_esm2[idx_tr], y_tr)
+        records.append({"Protein": protein_name, "Split": split_name, "Model": "ESM-2 + Ridge", **compute_metrics(y_te, ridge_esm2.predict(X_esm2[idx_te]))})
 
-        for plm, head_name, model, X_mat in configs:
-            model.fit(X_mat[idx_tr], y_tr)
-            preds = model.predict(X_mat[idx_te])
-            metrics = compute_metrics(y_te, preds)
-            records.append({"Protein": protein_name, "Split": split_name, "Foundation": plm, "Head": f"{plm} + {head_name}", **metrics})
+        ridge_esm3 = Ridge(alpha=1.0).fit(X_esm3[idx_tr], y_tr)
+        records.append({"Protein": protein_name, "Split": split_name, "Model": "ESM3 + Ridge", **compute_metrics(y_te, ridge_esm3.predict(X_esm3[idx_te]))})
 
-        # Deep MLP
+        # 2. XGBoost Baseline
+        xgb_esm2 = XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42, n_jobs=-1).fit(X_esm2[idx_tr], y_tr)
+        records.append({"Protein": protein_name, "Split": split_name, "Model": "ESM-2 + XGBoost", **compute_metrics(y_te, xgb_esm2.predict(X_esm2[idx_te]))})
+
+        xgb_esm3 = XGBRegressor(n_estimators=100, max_depth=4, learning_rate=0.05, random_state=42, n_jobs=-1).fit(X_esm3[idx_tr], y_tr)
+        records.append({"Protein": protein_name, "Split": split_name, "Model": "ESM3 + XGBoost", **compute_metrics(y_te, xgb_esm3.predict(X_esm3[idx_te]))})
+
+        # 3. Deep MLP Baseline
         mlp_esm2 = train_torch_mlp(X_esm2[idx_tr], y_tr, X_esm2[idx_te], device)
-        records.append({"Protein": protein_name, "Split": split_name, "Foundation": "ESM-2", "Head": "ESM-2 + Deep MLP", **compute_metrics(y_te, mlp_esm2)})
+        records.append({"Protein": protein_name, "Split": split_name, "Model": "ESM-2 + Deep MLP", **compute_metrics(y_te, mlp_esm2)})
 
         mlp_esm3 = train_torch_mlp(X_esm3[idx_tr], y_tr, X_esm3[idx_te], device)
-        records.append({"Protein": protein_name, "Split": split_name, "Foundation": "ESM3", "Head": "ESM3 + Deep MLP", **compute_metrics(y_te, mlp_esm3)})
+        records.append({"Protein": protein_name, "Split": split_name, "Model": "ESM3 + Deep MLP", **compute_metrics(y_te, mlp_esm3)})
+
+        # 4. GeoEpiNet (Advanced Geometric Model)
+        geo_preds = train_geoepinet(df, X_esm3, y, idx_tr, idx_te, coords, max_len, device)
+        records.append({"Protein": protein_name, "Split": split_name, "Model": "ESM3 + GeoEpiNet", **compute_metrics(y_te, geo_preds)})
 
     return pd.DataFrame(records)
