@@ -82,21 +82,25 @@ def main():
     # 2. Data split schematic
     plot_split_schematic(start_pos=1, end_pos=25, output_path="./results/data_split_schematic.png")
 
-    # 3. Targeted visualizations for avGFP (chromophore heatmap & 3D epistasis)
-    if "GFP" in cached_dfs:
+# Targeted visualizations:
+    # 1. TEM-1 for the 2D saturation heatmap (complete data matrix around Ser70)
+    if "TEM1" in cached_dfs:
         plot_fitness_heatmap(
-            df=cached_dfs["GFP"],
-            wt_seq=cached_cfgs["GFP"]["wt_seq"],
+            df=cached_dfs["TEM1"],
+            wt_seq=cached_cfgs["TEM1"]["wt_seq"],
             start_pos=60,
             end_pos=85,
-            output_path="./results/mutational_heatmap.png"
+            output_path="./results/mutational_heatmap.png",
+            title="TEM-1 β-Lactamase Active-Site Mutational Landscape (Ser70 Region)"
         )
+
+    # 2. avGFP for the 3D epistatic distance distribution (has combinatorial multi-mutants)
+    if "GFP" in cached_dfs:
         plot_epistatic_distance_distribution(
             df=cached_dfs["GFP"],
             coords=cached_coords["GFP"],
             output_path="./results/epistatic_distance_distribution.png"
         )
-
 
 
 if __name__ == "__main__":
