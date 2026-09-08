@@ -62,49 +62,101 @@ def plot_benchmark_summary(df_results: pd.DataFrame, output_path: str = "./resul
     print(f"Benchmark summary saved to: {output_path}")
 
 
-def plot_fitness_heatmap(df: pd.DataFrame, wt_seq: str, start_pos: int = 1, end_pos: int = 40, 
-                         output_path: str = "./results/mutational_heatmap.png"):
+def plot_fitness_heatmap(
+    df: pd.DataFrame, 
+    wt_seq: str, 
+    start_pos: int = 60, 
+    end_pos: int = 85, 
+    output_path: str = "./results/mutational_heatmap.png",
+    title: str = "Deep Mutational Scanning Landscape (Variant Effects)"
+):
     """
-    Renders a 2D DMS mutational landscape heatmap (ESM-1v paper style).
-    x-axis: sequence position index.
-    y-axis: 20 canonical amino acid substitutions.
+    Renders a publication-grade 2D DMS mutational landscape heatmap (ESM-1v style).
+    - x-axis: Sequence position index with wild-type amino acid.
+    - y-axis: 20 canonical amino acid substitutions.
+    - Markers: Black dots (•) indicate the wild-type residue at each position.
     """
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
-    positions = list(range(start_pos, min(end_pos + 1, len(wt_seq) + 1)))
-    heatmap_matrix = np.full((len(AMINO_ACIDS), len(positions)), np.nan)
     aa_to_idx = {aa: i for i, aa in enumerate(AMINO_ACIDS)}
-
+    
+    # 1. Parse all single-mutant records from the DataFrame
+    single_mutants = []
     for _, row in df.iterrows():
         mut = str(row["mutant"]).strip()
         if ":" in mut or mut in ["WT", "wt", ""]:
             continue
-        match = re.search(r"^([A-Z])(\d+)([A-Z])$", mut)
+        match = re.search(r"^([A-Za-z])(\d+)([A-Za-z])$", mut)
         if match:
-            wt_aa, pos, mut_aa = match.group(1), int(match.group(2)), match.group(3)
-            if pos in positions and mut_aa in aa_to_idx:
-                p_idx = positions.index(pos)
-                a_idx = aa_to_idx[mut_aa]
-                heatmap_matrix[a_idx, p_idx] = row["DMS_score"]
+            wt_aa, pos, mut_aa = match.group(1).upper(), int(match.group(2)), match.group(3).upper()
+            single_mutants.append((wt_aa, pos, mut_aa, float(row["DMS_score"])))
 
-    fig, ax = plt.subplots(figsize=(max(8, len(positions) * 0.28), 5.5), dpi=300)
-    cmap = sns.diverging_palette(240, 10, as_cmap=True) # Blue (active) to Red (deleterious)
+    # 2. Check if the specified window has data; auto-adjust if completely empty
+    available_positions = [m[1] for m in single_mutants]
+    window_positions = [p for p in available_positions if start_pos <= p <= end_pos]
     
+    if len(window_positions) == 0 and len(available_positions) > 0:
+        print(f"Warning: No single mutants found in window [{start_pos}, {end_pos}].")
+        # Auto-center around the densest 25-residue region
+        pos_counts = pd.Series(available_positions).value_counts().sort_index()
+        densest_pos = pos_counts.rolling(window=25, min_periods=1).sum().idxmax()
+        start_pos = max(1, densest_pos - 12)
+        end_pos = min(len(wt_seq), start_pos + 25)
+        print(f"Automatically adjusting window to region with data: [{start_pos}, {end_pos}].")
+    elif len(available_positions) == 0:
+        print("Error: No single-point mutations found in this DataFrame.")
+        return
+
+    positions = list(range(start_pos, min(end_pos + 1, len(wt_seq) + 1)))
+    heatmap_matrix = np.full((len(AMINO_ACIDS), len(positions)), np.nan)
+
+    # 3. Populate matrix with experimental scores
+    for wt_aa, pos, mut_aa, score in single_mutants:
+        if pos in positions and mut_aa in aa_to_idx:
+            p_idx = positions.index(pos)
+            a_idx = aa_to_idx[mut_aa]
+            heatmap_matrix[a_idx, p_idx] = score
+
+    # 4. Set symmetric color scale centered at 0 (ignoring NaNs)
+    valid_scores = heatmap_matrix[~np.isnan(heatmap_matrix)]
+    if len(valid_scores) > 0:
+        abs_max = np.nanpercentile(np.abs(valid_scores), 98)
+        abs_max = max(abs_max, 1.0)
+    else:
+        abs_max = 1.0
+
+    # 5. Render figure
+    fig, ax = plt.subplots(figsize=(max(8.5, len(positions) * 0.35), 6.0), dpi=300)
+    ax.set_facecolor("#f0f0f0") # Light gray background for unmeasured/missing variants
+
+    cmap = sns.diverging_palette(240, 10, s=90, l=50, as_cmap=True) # Blue (active) to Red (deleterious)
+
     sns.heatmap(
         heatmap_matrix,
         cmap=cmap,
         center=0.0,
-        cbar_kws={"label": "DMS Experimental Fitness Score"},
+        vmin=-abs_max,
+        vmax=abs_max,
+        cbar_kws={"label": "DMS Experimental Fitness Score", "shrink": 0.8},
         yticklabels=AMINO_ACIDS,
-        xticklabels=[f"{wt_seq[p-1]}{p}" for p in positions],
+        xticklabels=[f"{wt_seq[p-1]}{p}" if 1 <= p <= len(wt_seq) else str(p) for p in positions],
         linewidths=0.5,
         linecolor="white",
+        mask=np.isnan(heatmap_matrix),
         ax=ax
     )
 
-    ax.set_title("Deep Mutational Scanning Landscape (Variant Effects)", fontsize=11, fontweight="bold", pad=10)
-    ax.set_xlabel("Wild-Type Residue & Sequence Position", fontsize=9.5, fontweight="bold")
-    ax.set_ylabel("Substituted Amino Acid", fontsize=9.5, fontweight="bold")
-    plt.xticks(rotation=90, fontsize=7.5)
+    # 6. Add ESM-1v style black dots (•) at the wild-type residue positions
+    for p_idx, pos in enumerate(positions):
+        if 1 <= pos <= len(wt_seq):
+            wt_aa = wt_seq[pos - 1]
+            if wt_aa in aa_to_idx:
+                a_idx = aa_to_idx[wt_aa]
+                ax.text(p_idx + 0.5, a_idx + 0.5, "•", ha="center", va="center", color="black", fontsize=11)
+
+    ax.set_title(title, fontsize=12, fontweight="bold", pad=12)
+    ax.set_xlabel("Wild-Type Residue & Sequence Position", fontsize=10, fontweight="bold")
+    ax.set_ylabel("Substituted Amino Acid", fontsize=10, fontweight="bold")
+    plt.xticks(rotation=90, fontsize=8)
     plt.yticks(rotation=0, fontsize=8)
 
     plt.tight_layout()
