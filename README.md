@@ -113,16 +113,20 @@ ESM3 (`esm3_sm_open_v1`, 1.4B parameters, $d=1536$) quantizes experimental 3D cr
 <p align="center"><em>Figure 3: 3D Proximity of Epistatic Mutations in avGFP. Pairwise Cα Euclidean distance distribution (Dij) for all double mutants (blue) versus interactive epistatic pairs (red). Epistatic mutations cluster below 8 Å, providing empirical justification for the spatial exponential decay kernel used in GeoEpiNet.</em></p>
 
 ### 3.2 GeoEpiNet (Geometric Epistasis Network)
-Standard pooling heads enforce linear additivity and discard non-linear spatial interactions. GeoEpiNet integrates full-rank multimodal embeddings with pairwise distance-weighted interaction terms[cite: 1, 6]:
+Standard pooling heads enforce linear additivity and discard non-linear spatial interactions [1]. GeoEpiNet integrates full-rank multimodal embeddings with pairwise distance-weighted interaction terms:
 
-1. **Residual Highway Backbone:** Baseline capacity is preserved through an MLP stream:
-   $$\mathbf{h}_{\text{base}} = \operatorname{MLP}(\Delta \mathbf{z}_{\text{multi}})$$
-2. **Contact-Weighted Epistatic Coupling:** For multi-mutants ($k \ge 2$), each mutation vector is projected to latent interaction space $\mathbf{z}_i = \operatorname{Linear}(\Delta \mathbf{z}_i) \in \mathbb{R}^{d_{\text{epi}}}$ ($d_{\text{epi}} = 64$). Pairwise Hadamard products are exponentially weighted by $C_\alpha$ Euclidean distances ($D_{ij}$) from crystal coordinates:
-   $$\mathbf{h}_{\text{epi}} = \frac{1}{\binom{k}{2}} \sum_{i < j} (\mathbf{z}_i \odot \mathbf{z}_j) \cdot \exp\left(-\frac{D_{ij}}{d_0}\right)$$
-   * $\binom{k}{2} = \frac{k(k-1)}{2}$ maintains uniform magnitude across mutational depths.
-   * $d_0 = 8.0 aligns with the physical contact distance where epistatic interactions cluster.
-3. **Gated Fusion Readout:** A learnable scaling factor $\alpha$ modulates the epistatic adjustment before linear readout:
-   $$\hat{y} = \mathbf{w}^\top \left(\mathbf{h}_{\text{base}} + \alpha \cdot \mathbf{W}_{\text{epi}} \mathbf{h}_{\text{epi}}\right) + b$$
+* **Residual Highway Backbone:** Baseline capacity is preserved through an MLP stream over the average delta representation:
+  $$\mathbf{h}_{\text{base}} = \operatorname{MLP}(\Delta \mathbf{z}_{\text{multi}})$$
+
+* **Contact-Weighted Epistatic Coupling:** For multi-mutants ($k \ge 2$), each mutation vector is projected to a latent interaction space $\mathbf{z}_i = \operatorname{Linear}(\Delta \mathbf{z}_i) \in \mathbb{R}^{d_{\text{epi}}}$ ($d_{\text{epi}} = 64$). Pairwise Hadamard products are exponentially weighted by $C_\alpha$ Euclidean distances ($D_{ij}$) from crystal coordinates:
+  $$\mathbf{h}_{\text{epi}} = \begin{cases} 
+  \displaystyle \frac{1}{\binom{k}{2}} \sum_{i < j} (\mathbf{z}_i \odot \mathbf{z}_j) \cdot \exp\left(-\frac{D_{ij}}{d_0}\right), & \text{if } k \ge 2 \\[10pt]
+  \mathbf{0}, & \text{if } k = 1
+  \end{cases}$$
+  where $\binom{k}{2} = \frac{k(k-1)}{2}$ normalizes interaction magnitudes across varying mutational depths, and $d_0 = 8.0\text{ \AA}$ aligns with the physical contact distance where epistatic interactions cluster [1].
+
+* **Gated Fusion Readout:** A learnable scaling factor $\alpha$ modulates the epistatic adjustment before linear readout:
+  $$\hat{y} = \mathbf{w}^\top \left(\mathbf{h}_{\text{base}} + \alpha \cdot \mathbf{W}_{\text{epi}} \mathbf{h}_{\text{epi}}\right) + b$$
 
 ---
 
