@@ -25,44 +25,44 @@ python main.py --target all --samples 1500
 ---
 
 ## Abstract
-Accurately predicting how amino acid substitutions alter protein phenotype is a core challenge in directed evolution and protein engineering[cite: 1]. While sequence-only Protein Language Models (PLMs) such as ESM-2 infer evolutionary constraints from primary sequence databases[cite: 1], frontier multimodal architectures like ESM3 unify primary sequences with discrete 3D tertiary coordinate tokens[cite: 1, 3]. In this work, sequence-only representations (ESM-2 650M) are evaluated against structure-conditioned multimodal representations (ESM3 1.4B) across two Deep Mutational Scanning (DMS) assays: TEM-1 $\beta$-lactamase (catalytic antibiotic resistance) and avGFP (fluorescence emission brightness)[cite: 1].
+Accurately predicting how amino acid substitutions alter protein phenotype is a core challenge in directed evolution and protein engineering. While sequence-only Protein Language Models (PLMs) such as ESM-2 infer evolutionary constraints from primary sequence databases, frontier multimodal architectures like ESM3 unify primary sequences with discrete 3D tertiary coordinate tokens. In this work, sequence-only representations (ESM-2 650M) are evaluated against structure-conditioned multimodal representations (ESM3 1.4B) across two Deep Mutational Scanning (DMS) assays: TEM-1 $\beta$-lactamase (catalytic antibiotic resistance) and avGFP (fluorescence emission brightness).
 
-To verify whether models learn general biophysical rules rather than memorizing position-specific tolerance, three leakage-proof validation partitions were instituted: **Random** (interpolation), **Positional** (spatial extrapolation), and **Mutational Depth** (epistatic extrapolation)[cite: 1]. Standard random cross-validation yields inflated correlations ($\rho \approx 0.73$) because models memorize position-specific tolerance[cite: 1]. When extrapolating to unseen sequence positions, sequence-only representations drop to $\rho \approx 0.44\text{--}0.50$[cite: 1]. Structural conditioning in ESM3 rescues spatial generalization[cite: 1]. To capture non-linear epistatic interactions in combinatorial mutants, **GeoEpiNet** couples a residual multimodal stream with pairwise 3D-contact-weighted interaction terms[cite: 1, 6]. Across empirical benchmarks, GeoEpiNet achieved top performance on spatial extrapolation ($\rho = 0.7029$ on TEM-1, $\rho = 0.5355$ on avGFP) and proved the most resilient model when evaluated on higher-order mutational depth ($\rho = 0.1854$, $\text{NDCG}@10\% = 0.6688$)[cite: 1].
+To verify whether models learn general biophysical rules rather than memorizing position-specific tolerance, three leakage-proof validation partitions were instituted: **Random** (interpolation), **Positional** (spatial extrapolation), and **Mutational Depth** (epistatic extrapolation). Standard random cross-validation yields inflated correlations ($\rho \approx 0.73$) because models memorize position-specific tolerance. When extrapolating to unseen sequence positions, sequence-only representations drop to $\rho \approx 0.44\text{--}0.50$. Structural conditioning in ESM3 rescues spatial generalization. To capture non-linear epistatic interactions in combinatorial mutants, **GeoEpiNet** couples a residual multimodal stream with pairwise 3D-contact-weighted interaction terms. Across empirical benchmarks, GeoEpiNet achieved top performance on spatial extrapolation ($\rho = 0.7029$ on TEM-1, $\rho = 0.5355$ on avGFP) and proved the most resilient model when evaluated on higher-order mutational depth ($\rho = 0.1854$, $\text{NDCG}@10\% = 0.6688$).
 
 ---
 
 ## 1. Motivation and Theoretical Foundations
 
 ### 1.1 The Protein Fitness Landscape
-A protein sequence $\mathbf{x}$ of length $L$ composed of canonical amino acids $\mathcal{A}$ resides in a combinatorial sequence space of size $\vert{}\mathcal{A}\vert{}^L = 20^L$[cite: 1]. A protein fitness landscape is defined as the mapping[cite: 1]:
+A protein sequence $\mathbf{x}$ of length $L$ composed of canonical amino acids $\mathcal{A}$ resides in a combinatorial sequence space of size $\vert{}\mathcal{A}\vert{}^L = 20^L$. A protein fitness landscape is defined as the mapping:
 
 $$f: \mathcal{A}^L \to \mathbb{R}$$
 
-which assigns a scalar phenotypic value to each sequence, such as catalytic turnover rate ($k_{\text{cat}}/K_M$), thermostability ($\Delta\Delta G$), or fluorescence brightness[cite: 1]. In Deep Mutational Scanning (DMS), variant fitness is quantified by sequencing read counts before and after functional selection[cite: 1]:
+which assigns a scalar phenotypic value to each sequence, such as catalytic turnover rate ($k_{\text{cat}}/K_M$), thermostability ($\Delta\Delta G$), or fluorescence brightness. In Deep Mutational Scanning (DMS), variant fitness is quantified by sequencing read counts before and after functional selection:
 
 $$y_i = \ln \left( \frac{c_i^{\text{post}} / c_{\text{wt}}^{\text{post}}}{c_i^{\text{pre}} / c_{\text{wt}}^{\text{pre}}} \right)$$
 
-* $y_i \in \mathbb{R}$ is the experimental fitness score (log-enrichment ratio) of variant $i$ ($y_i = 0$ indicates neutral fitness; $y_i > 0$ denotes beneficial enrichment; $y_i < 0$ reflects functional impairment)[cite: 1].
-* $c_i^{\text{pre}}$ and $c_i^{\text{post}}$ represent sequencing read counts of variant $i$ before and after selection[cite: 1].
-* $c_{\text{wt}}^{\text{pre}}$ and $c_{\text{wt}}^{\text{post}}$ represent reference wild-type read counts before and after selection, normalizing for batch sequencing depth[cite: 1].
+* $y_i \in \mathbb{R}$ is the experimental fitness score (log-enrichment ratio) of variant $i$ ($y_i = 0$ indicates neutral fitness; $y_i > 0$ denotes beneficial enrichment; $y_i < 0$ reflects functional impairment).
+* $c_i^{\text{pre}}$ and $c_i^{\text{post}}$ represent sequencing read counts of variant $i$ before and after selection.
+* $c_{\text{wt}}^{\text{pre}}$ and $c_{\text{wt}}^{\text{post}}$ represent reference wild-type read counts before and after selection, normalizing for batch sequencing depth.
 
 ### 1.2 Epistasis and Physical Proximity
-When multiple substitutions co-occur, their joint fitness effect often deviates non-additively due to **epistasis**[cite: 1]:
+When multiple substitutions co-occur, their joint fitness effect often deviates non-additively due to **epistasis**:
 
 $$\Delta y_{ij} = \Delta y_i + \Delta y_j + \varepsilon_{ij}$$
 
-* $\Delta y_i = y_i - y_{\text{wt}}$ and $\Delta y_j = y_j - y_{\text{wt}}$ denote individual point mutation effects[cite: 1].
-* $\Delta y_{ij}$ denotes the fitness change of the double mutant[cite: 1].
-* $\varepsilon_{ij} \in \mathbb{R}$ is the epistatic interaction term[cite: 1]. When $\varepsilon_{ij} = 0$, substitutions act additively; negative epistasis ($\varepsilon_{ij} < 0$) indicates cooperative destabilization, whereas positive epistasis ($\varepsilon_{ij} > 0$) marks compensatory stabilization[cite: 1].
+* $\Delta y_i = y_i - y_{\text{wt}}$ and $\Delta y_j = y_j - y_{\text{wt}}$ denote individual point mutation effects.
+* $\Delta y_{ij}$ denotes the fitness change of the double mutant.
+* $\varepsilon_{ij} \in \mathbb{R}$ is the epistatic interaction term. When $\varepsilon_{ij} = 0$, substitutions act additively; negative epistasis ($\varepsilon_{ij} < 0$) indicates cooperative destabilization, whereas positive epistasis ($\varepsilon_{ij} > 0$) marks compensatory stabilization.
 
-Residues distant in 1D sequence often directly contact one another in folded 3D tertiary structure ($<8\text{ \AA}$)[cite: 1]. Additive linear models assume $\varepsilon_{ij} = 0$, failing when multi-point mutations trigger structural clashes[cite: 1].
+Residues distant in 1D sequence often directly contact one another in folded 3D tertiary structure ($<8\text{ \AA}$). Additive linear models assume $\varepsilon_{ij} = 0$, failing when multi-point mutations trigger structural clashes.
 
 ### 1.3 Leakage-Free Validation Strategy
-Standard random cross-validation allows substitutions at identical sequence positions to appear in both training and testing folds, allowing models to memorize site permissiveness[cite: 1]. Three strict validation splits are implemented to benchmark true generalization[cite: 1]:
+Standard random cross-validation allows substitutions at identical sequence positions to appear in both training and testing folds, allowing models to memorize site permissiveness. Three strict validation splits are implemented to benchmark true generalization:
 
-* **Random Split (Interpolation):** An 80/20 train/test partition providing the in-distribution baseline[cite: 1].
-* **Positional Split (Spatial Extrapolation):** Completely withholds all positions where $\text{pos} \pmod 5 = 0$ for testing, forcing models to predict fitness on unseen structural loci[cite: 1].
-* **Mutational Depth Split (Epistatic Extrapolation):** Trains strictly on single substitutions ($k = 1$) and tests on combinatorial multi-mutants ($k \ge 2$)[cite: 1].
+* **Random Split (Interpolation):** An 80/20 train/test partition providing the in-distribution baseline.
+* **Positional Split (Spatial Extrapolation):** Completely withholds all positions where $\text{pos} \pmod 5 = 0$ for testing, forcing models to predict fitness on unseen structural loci.
+* **Mutational Depth Split (Epistatic Extrapolation):** Trains strictly on single substitutions ($k = 1$) and tests on combinatorial multi-mutants ($k \ge 2$).
 
 <p align="center">
   <img src="src/img/data_split_schematic.png" width="85%" alt="Data Split Schematic" />
@@ -71,22 +71,22 @@ Standard random cross-validation allows substitutions at identical sequence posi
 
 | Target Protein | Phenotype | Fold Class | Samples ($N$) | Random Split | Positional Split | Depth Split |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
-| **TEM-1 $\beta$-lactamase** | Antibiotic Resistance | Globular $\alpha/\beta$ | 1,500 | 1,200 tr / 300 te | 1,196 tr / 304 te | Skipped ($k=1$ only)[cite: 1] |
-| **avGFP** | Fluorescence Brightness | 11-strand $\beta$-barrel | 2,500 | 2,000 tr / 500 te | 1,985 tr / 515 te | 1,080 tr ($k=1$) / 1,420 te ($k\ge 2$)[cite: 1] |
+| **TEM-1 $\beta$-lactamase** | Antibiotic Resistance | Globular $\alpha/\beta$ | 1,500 | 1,200 tr / 300 te | 1,196 tr / 304 te | Skipped ($k=1$ only) |
+| **avGFP** | Fluorescence Brightness | 11-strand $\beta$-barrel | 2,500 | 2,000 tr / 500 te | 1,985 tr / 515 te | 1,080 tr ($k=1$) / 1,420 te ($k\ge 2$) |
 
 ---
 
 ## 2. Representation Engineering
 
 ### 2.1 Site-Directed Delta Vectors ($\Delta\mathbf{z}$)
-Whole-sequence mean-pooling averages latent representations across all $L$ residues, diluting a single-site mutation by over $99\%$ and causing regressor predictions to collapse to the training mean ($\rho \approx -0.07$)[cite: 1].
+Whole-sequence mean-pooling averages latent representations across all $L$ residues, diluting a single-site mutation by over $99\%$ and causing regressor predictions to collapse to the training mean ($\rho \approx -0.07$).
 
-To eliminate scaffold invariants and isolate localized biophysical perturbations, site-directed delta vectors are computed using the wild-type state $\mathbf{z}_{\text{wt}}$ as an anchor[cite: 1]:
+To eliminate scaffold invariants and isolate localized biophysical perturbations, site-directed delta vectors are computed using the wild-type state $\mathbf{z}_{\text{wt}}$ as an anchor:
 
 $$\Delta \mathbf{z}_i = \mathbf{z}_{\text{mut}, i} - \mathbf{z}_{\text{wt}, i}$$
 
-* $\mathbf{z}_{\text{mut}, i} \in \mathbb{R}^d$ and $\mathbf{z}_{\text{wt}, i} \in \mathbb{R}^d$ are final-layer hidden vectors at mutated locus $i$ ($d=1280$ for ESM-2, $d=1536$ for ESM3)[cite: 1].
-* For variants with multiple mutations across index set $\mathcal{M}$ ($\vert{}\mathcal{M}\vert{} = k$), the baseline representation is the mean delta[cite: 1]:
+* $\mathbf{z}_{\text{mut}, i} \in \mathbb{R}^d$ and $\mathbf{z}_{\text{wt}, i} \in \mathbb{R}^d$ are final-layer hidden vectors at mutated locus $i$ ($d=1280$ for ESM-2, $d=1536$ for ESM3).
+* For variants with multiple mutations across index set $\mathcal{M}$ ($\vert{}\mathcal{M}\vert{} = k$), the baseline representation is the mean delta:
 
 $$\Delta \mathbf{z}_{\text{multi}} = \frac{1}{k} \sum_{i \in \mathcal{M}} \Delta \mathbf{z}_i$$
 
@@ -96,16 +96,16 @@ $$\Delta \mathbf{z}_{\text{multi}} = \frac{1}{k} \sum_{i \in \mathcal{M}} \Delta
 <p align="center"><em>Figure 2: Deep Mutational Scanning Fitness Landscape of TEM-1 β-Lactamase. Experimental fitness values across residues 60–85 for all 20 canonical amino acid substitutions. Black dots indicate the wild-type residue. Tolerant surface positions (P60, E61, A84) contrast sharply with intolerant core and active sites (F64, K71, L74, C75), highlighting the positional constraints models must learn.</em></p>
 
 ### 2.2 Multimodal Structural Conditioning (ESM3)
-ESM3 (`esm3_sm_open_v1`, 1.4B parameters, $d=1536$) quantizes experimental 3D crystal coordinates (PDB `1BTL` for TEM-1, `1EMA` for avGFP) into discrete VQ-VAE geometric structure tokens[cite: 1, 3]. Cleaved signal peptides (residues 1--23 in TEM-1) are mapped to coordinate offset 24 and masked using structural token `4096`, allowing geometric attention to attend directly over the native catalytic core[cite: 1].
+ESM3 (`esm3_sm_open_v1`, 1.4B parameters, $d=1536$) quantizes experimental 3D crystal coordinates (PDB `1BTL` for TEM-1, `1EMA` for avGFP) into discrete VQ-VAE geometric structure tokens[cite: 1, 3]. Cleaved signal peptides (residues 1--23 in TEM-1) are mapped to coordinate offset 24 and masked using structural token `4096`, allowing geometric attention to attend directly over the native catalytic core.
 
 ---
 
 ## 3. Supervised Regressor & GeoEpiNet Architecture
 
 ### 3.1 Baseline Heads
-* **Ridge Regression:** $L_2$-regularized linear model ($\alpha = 1.0$) evaluating feature separability[cite: 1].
-* **XGBoost:** Gradient-boosted decision tree ensemble (`n_estimators=100`, `max_depth=4`, `lr=0.05`)[cite: 1].
-* **Deep MLP:** 3-layer neural network with LayerNorm, GELU, and Dropout ($p = 0.2$), optimized using AdamW[cite: 1].
+* **Ridge Regression:** $L_2$-regularized linear model ($\alpha = 1.0$) evaluating feature separability.
+* **XGBoost:** Gradient-boosted decision tree ensemble (`n_estimators=100`, `max_depth=4`, `lr=0.05`).
+* **Deep MLP:** 3-layer neural network with LayerNorm, GELU, and Dropout ($p = 0.2$), optimized using AdamW.
 
 <p align="center">
   <img src="src/img/epistatic_distance_distribution.png" width="60%" alt="3D Proximity of Epistatic Mutations" />
@@ -113,15 +113,15 @@ ESM3 (`esm3_sm_open_v1`, 1.4B parameters, $d=1536$) quantizes experimental 3D cr
 <p align="center"><em>Figure 3: 3D Proximity of Epistatic Mutations in avGFP. Pairwise Cα Euclidean distance distribution (Dij) for all double mutants (blue) versus interactive epistatic pairs (red). Epistatic mutations cluster below 8 Å, providing empirical justification for the spatial exponential decay kernel used in GeoEpiNet.</em></p>
 
 ### 3.2 GeoEpiNet (Geometric Epistasis Network)
-Standard pooling heads enforce linear additivity and discard non-linear spatial interactions[cite: 1]. GeoEpiNet integrates full-rank multimodal embeddings with pairwise distance-weighted interaction terms[cite: 1, 6]:
+Standard pooling heads enforce linear additivity and discard non-linear spatial interactions. GeoEpiNet integrates full-rank multimodal embeddings with pairwise distance-weighted interaction terms[cite: 1, 6]:
 
-1. **Residual Highway Backbone:** Baseline capacity is preserved through an MLP stream[cite: 1]:
+1. **Residual Highway Backbone:** Baseline capacity is preserved through an MLP stream:
    $$\mathbf{h}_{\text{base}} = \operatorname{MLP}(\Delta \mathbf{z}_{\text{multi}})$$
-2. **Contact-Weighted Epistatic Coupling:** For multi-mutants ($k \ge 2$), each mutation vector is projected to latent interaction space $\mathbf{z}_i = \operatorname{Linear}(\Delta \mathbf{z}_i) \in \mathbb{R}^{d_{\text{epi}}}$ ($d_{\text{epi}} = 64$)[cite: 1]. Pairwise Hadamard products are exponentially weighted by $C_\alpha$ Euclidean distances ($D_{ij}$) from crystal coordinates[cite: 1]:
+2. **Contact-Weighted Epistatic Coupling:** For multi-mutants ($k \ge 2$), each mutation vector is projected to latent interaction space $\mathbf{z}_i = \operatorname{Linear}(\Delta \mathbf{z}_i) \in \mathbb{R}^{d_{\text{epi}}}$ ($d_{\text{epi}} = 64$). Pairwise Hadamard products are exponentially weighted by $C_\alpha$ Euclidean distances ($D_{ij}$) from crystal coordinates:
    $$\mathbf{h}_{\text{epi}} = \frac{1}{\binom{k}{2}} \sum_{i < j} (\mathbf{z}_i \odot \mathbf{z}_j) \cdot \exp\left(-\frac{D_{ij}}{d_0}\right)$$
-   * $\binom{k}{2} = \frac{k(k-1)}{2}$ maintains uniform magnitude across mutational depths[cite: 1].
-   * $d_0 = 8.0\text{ \AA}$ aligns with the physical contact distance where epistatic interactions cluster[cite: 1].
-3. **Gated Fusion Readout:** A learnable scaling factor $\alpha$ modulates the epistatic adjustment before linear readout[cite: 1]:
+   * $\binom{k}{2} = \frac{k(k-1)}{2}$ maintains uniform magnitude across mutational depths.
+   * $d_0 = 8.0 aligns with the physical contact distance where epistatic interactions cluster.
+3. **Gated Fusion Readout:** A learnable scaling factor $\alpha$ modulates the epistatic adjustment before linear readout:
    $$\hat{y} = \mathbf{w}^\top \left(\mathbf{h}_{\text{base}} + \alpha \cdot \mathbf{W}_{\text{epi}} \mathbf{h}_{\text{epi}}\right) + b$$
 
 ---
@@ -162,9 +162,9 @@ Standard pooling heads enforce linear additivity and discard non-linear spatial 
 | | **Depth Split** ($k=1 \to k\ge 2$) | **ESM3 + GeoEpiNet** | **0.1854** | **0.0340** | **0.6688** |
 
 ### 4.2 Key Biophysical Takeaways
-* **Positional Memorization Gap:** Random cross-validation yields inflated correlation values ($\rho \approx 0.71\text{--}0.73$), but sequence-only models drop to $\rho \approx 0.44\text{--}0.50$ when evaluated on unseen positions[cite: 1]. GeoEpiNet restores spatial ranking accuracy on both targets ($\rho = 0.7029$ on TEM-1, $\rho = 0.5355$ on avGFP) by grounding mutations in 3D contact geometry[cite: 1].
-* **Tree Model Inversion on Epistatic Depth:** On combinatorial multi-mutants, XGBoost produces negative rank correlations ($\rho = -0.1543$ with ESM-2, $\rho = -0.1073$ with ESM3)[cite: 1]. Tree models calibrate axis-aligned splits on single mutants and fail to capture cooperative folding collapse thresholds[cite: 1].
-* **Epistatic Recovery:** GeoEpiNet delivers the highest ranking accuracy ($\rho = 0.1854$) and candidate recovery ($\text{NDCG}@10\% = 0.6688$) on the depth split by weighting interactions inversely by physical 3D distance[cite: 1].
+* **Positional Memorization Gap:** Random cross-validation yields inflated correlation values ($\rho \approx 0.71\text{--}0.73$), but sequence-only models drop to $\rho \approx 0.44\text{--}0.50$ when evaluated on unseen positions. GeoEpiNet restores spatial ranking accuracy on both targets ($\rho = 0.7029$ on TEM-1, $\rho = 0.5355$ on avGFP) by grounding mutations in 3D contact geometry.
+* **Tree Model Inversion on Epistatic Depth:** On combinatorial multi-mutants, XGBoost produces negative rank correlations ($\rho = -0.1543$ with ESM-2, $\rho = -0.1073$ with ESM3). Tree models calibrate axis-aligned splits on single mutants and fail to capture cooperative folding collapse thresholds.
+* **Epistatic Recovery:** GeoEpiNet delivers the highest ranking accuracy ($\rho = 0.1854$) and candidate recovery ($\text{NDCG}@10\% = 0.6688$) on the depth split by weighting interactions inversely by physical 3D distance.
 
 ---
 
