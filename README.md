@@ -66,10 +66,8 @@ Standard random cross-validation allows substitutions at identical sequence posi
 - **Positional Split (Spatial Extrapolation):** Completely withholds all positions where $\text{pos} \pmod 5 = 0$ for testing, forcing models to predict fitness on unseen structural loci.
 - **Mutational Depth Split (Epistatic Extrapolation):** Trains strictly on single substitutions ($k = 1$) and tests on combinatorial multi-mutants ($k \ge 2$).
 
-<p align="center">
-  <img src="results/data_split_schematic.png" width="85%" alt="Data Split Schematic" />
-</p>
-<p align="center"><em>Figure 1: Schematic of Data Partitioning Strategies. (A) In a randomized split, training and test variants share identical sequence positions, leading to site-specific memorization. (B) In the positional split, entire residue positions (pos mod 5 == 0) are held out to assess spatial extrapolation to unobserved structural loci.</em></p>
+![Data Split Schematic](./results/data_split_schematic.png)
+*Figure 1: Schematic of Data Partitioning Strategies. (A) In a randomized split, training and test variants share identical sequence positions. (B) In the positional split, entire residue positions (pos mod 5 == 0) are held out to assess spatial extrapolation.*
 
 | Target Protein | Phenotype | Fold Class | Samples ($N$) | Random Split | Positional Split | Depth Split |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: |
@@ -92,10 +90,8 @@ $$\Delta \mathbf{z}_i = \mathbf{z}_{\text{mut}, i} - \mathbf{z}_{\text{wt}, i}$$
 
 $$\Delta \mathbf{z}_{\text{multi}} = \frac{1}{k} \sum_{i \in \mathcal{M}} \Delta \mathbf{z}_i$$
 
-<p align="center">
-  <img src="results/mutational_heatmap.png" width="85%" alt="TEM-1 Mutational Heatmap" />
-</p>
-<p align="center"><em>Figure 2: Deep Mutational Scanning Fitness Landscape of TEM-1 β-Lactamase. Experimental fitness values across residues 60–85 for all 20 canonical amino acid substitutions. Black dots indicate the wild-type residue. Tolerant surface positions (P60, E61, A84) contrast sharply with intolerant core and active sites (F64, K71, L74, C75), highlighting the positional constraints models must learn.</em></p>
+![TEM-1 Mutational Heatmap](./results/mutational_heatmap.png)
+*Figure 2: Deep Mutational Scanning Fitness Landscape of TEM-1 β-Lactamase. Experimental fitness values across residues 60–85 for all 20 canonical amino acid substitutions.*
 
 ### 2.2 Multimodal Structural Conditioning (ESM3)
 ESM3 (`esm3_sm_open_v1`, 1.4B parameters, $d=1536$) quantizes experimental 3D crystal coordinates (PDB `1BTL` for TEM-1, `1EMA` for avGFP) into discrete VQ-VAE geometric structure tokens. Cleaved signal peptides (residues 1--23 in TEM-1) are mapped to coordinate offset 24 and masked using structural token `4096`, allowing geometric attention to attend directly over the native catalytic core.
@@ -109,10 +105,8 @@ ESM3 (`esm3_sm_open_v1`, 1.4B parameters, $d=1536$) quantizes experimental 3D cr
 - **XGBoost:** Gradient-boosted decision tree ensemble (`n_estimators=100`, `max_depth=4`, `lr=0.05`).
 - **Deep MLP:** 3-layer neural network with LayerNorm, GELU, and Dropout ($p = 0.2$), optimized using AdamW.
 
-<p align="center">
-  <img src="results/epistatic_distance_distribution.png" width="60%" alt="3D Proximity of Epistatic Mutations" />
-</p>
-<p align="center"><em>Figure 3: 3D Proximity of Epistatic Mutations in avGFP. Pairwise Cα Euclidean distance distribution (Dij) for double mutants. The dashed vertical line at 8 Å marks the physical contact boundary below which cooperative steric clashes and compensatory electrostatic interactions occur.</em></p>
+![3D Proximity of Epistatic Mutations](./results/epistatic_distance_distribution.png)
+*Figure 3: 3D Proximity of Epistatic Mutations in avGFP. Pairwise Cα Euclidean distance distribution (Dij) for double mutants. The dashed vertical line at 8 Å marks the physical contact boundary.*
 
 ### 3.2 GeoEpiNet (Geometric Epistasis Network)
 Standard pooling heads enforce linear additivity and discard non-linear spatial interactions. GeoEpiNet integrates full-rank multimodal embeddings with pairwise distance-weighted interaction terms:
@@ -131,10 +125,8 @@ Standard pooling heads enforce linear additivity and discard non-linear spatial 
 
 ## 4. Empirical Results and Findings
 
-<p align="center">
-  <img src="results/cross_protein_master_diagnostics.png" width="95%" alt="Cross-Protein Master Diagnostics" />
-</p>
-<p align="center"><em>Figure 4: Master Cross-Protein Benchmark Diagnostics. Predictive Spearman rank correlation (ρ) across TEM-1 β-lactamase (left) and avGFP (right) under Random, Positional, and Mutational Depth split regimes.</em></p>
+![Cross-Protein Master Diagnostics](./results/cross_protein_master_diagnostics.png)
+*Figure 4: Master Cross-Protein Benchmark Diagnostics. Predictive Spearman rank correlation (ρ) across TEM-1 β-lactamase (left) and avGFP (right) under Random, Positional, and Mutational Depth split regimes.*
 
 ### 4.1 Benchmark Evaluation Table
 
